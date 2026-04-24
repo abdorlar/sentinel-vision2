@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinel Vision | AI Command Center</title>
+    <style>
+        :root {
+            --primary-glow: #00e5ff;
+            --secondary-glow: #0078d4;
+            --danger-glow: #ff4b4b;
+            --bg-dark: #0a0c10;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --text-main: #e0e0e0;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-dark);
+            background-image: radial-gradient(circle at 2px 2px, rgba(255,255,255,0.05) 1px, transparent 0);
+            background-size: 40px 40px;
+            font-family: 'Segoe UI', sans-serif;
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        header {
+            width: 100%;
+            padding: 15px 0;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.8);
+            border-bottom: 1px solid var(--primary-glow);
+            backdrop-filter: blur(10px);
+            margin-bottom: 20px;
+        }
+
+        header h1 { margin: 0; font-size: 1.5rem; letter-spacing: 4px; color: var(--primary-glow); text-shadow: 0 0 10px var(--primary-glow); }
+
+        .command-center {
+            width: 90%;
+            max-width: 500px; /* Slimmer card for a compact look */
+            background: var(--card-bg);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        /* --- Smaller Camera Viewport --- */
+        .viewport-container {
+            position: relative;
+            width: 280px; /* Reduced width */
+            height: 210px; /* Reduced height */
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid rgba(0, 229, 255, 0.3);
+        }
+
+        #video { width: 100%; height: 100%; object-fit: cover; }
+
+        .laser {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 2px;
+            background: linear-gradient(to right, transparent, var(--primary-glow), transparent);
+            box-shadow: 0 0 15px var(--primary-glow);
+            animation: scanMove 3s ease-in-out infinite;
+            z-index: 5;
+        }
+
+        @keyframes scanMove {
+            0%, 100% { top: 5%; }
+            50% { top: 95%; }
+        }
+
+        /* --- Controls --- */
+        .input-group {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            padding: 15px;
+            color: white;
+            text-align: center;
+            font-size: 0.9rem;
+            outline: none;
+        }
+
+        .btn-group { display: flex; gap: 10px; width: 100%; }
+
+        button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            transition: 0.3s;
+        }
+
+        .btn-in { background: var(--secondary-glow); color: white; box-shadow: 0 0 10px rgba(0, 120, 212, 0.4); }
+        .btn-out { background: transparent; border: 1px solid var(--danger-glow); color: var(--danger-glow); }
+        
+        button:hover { transform: translateY(-2px); filter: brightness(1.2); }
+
+        #status {
+            width: 100%;
+            font-size: 0.75rem;
+            padding: 10px;
+            text-align: center;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            border-left: 3px solid var(--primary-glow);
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>SENTINEL VISION</h1>
+    <p>Node 01 // Biometric Auth</p>
+</header>
+
+<div class="command-center">
+    <div class="viewport-container">
+        <div class="laser"></div>
+        <video id="video" autoplay playsinline muted></video>
+    </div>
+
+    <div class="input-group">
+        <input type="text" id="employeeId" placeholder="ENTER EMPLOYEE NAME">
+    </div>
+
+    <div class="btn-group">
+        <button class="btn-in" onclick="processAuth('TIME_IN')">Time In</button>
+        <button class="btn-out" onclick="processAuth('TIME_OUT')">Time Out</button>
+    </div>
+
+    <div id="status">SYS_STATUS: STANDBY</div>
+</div>
+
+<script>
+    const video = document.getElementById('video');
+    const status = document.getElementById('status');
+
+    async function startSystem() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+        } catch (err) {
+            status.innerText = "SYS_STATUS: CAMERA_ERROR";
+        }
+    }
+
+    async function processAuth(type) {
+        const name = document.getElementById('employeeId').value;
+        if (!name) return;
+        
+        status.innerText = `SYS_STATUS: LOGGING_${type}...`;
+        
+        try {
+            const response = await fetch('/api/SubmitAttendance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, type, time: new Date().toISOString() })
+            });
+            const data = await response.json();
+            status.innerText = `SYS_STATUS: ${data.message.toUpperCase()}`;
+        } catch (e) {
+            status.innerText = "SYS_STATUS: OFFLINE_MODE";
+        }
+    }
+
+    window.onload = startSystem;
+</script>
+
+</body>
+</html>
