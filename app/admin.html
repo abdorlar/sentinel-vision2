@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinel Admin | Biometric Enrollment</title>
+    <style>
+        :root {
+            --admin-glow: #ffb300; /* Gold/Amber for Admin mode */
+            --bg-dark: #121212;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --text-main: #e0e0e0;
+        }
+
+        body {
+            margin: 0; background-color: var(--bg-dark); font-family: 'Segoe UI', sans-serif;
+            color: var(--text-main); display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+        }
+
+        header {
+            width: 100%; padding: 15px 0; text-align: center; background: rgba(0, 0, 0, 0.8);
+            border-bottom: 1px solid var(--admin-glow); margin-bottom: 20px;
+        }
+
+        header h1 { margin: 0; font-size: 1.5rem; color: var(--admin-glow); letter-spacing: 2px;}
+
+        .enrollment-card {
+            width: 90%; max-width: 500px; background: var(--card-bg); padding: 25px;
+            border-radius: 12px; border: 1px solid rgba(255, 179, 0, 0.3);
+            display: flex; flex-direction: column; gap: 15px;
+        }
+
+        .viewport-container {
+            width: 100%; height: 250px; background: #000; border-radius: 8px;
+            overflow: hidden; border: 2px dashed var(--admin-glow); position: relative;
+        }
+
+        #video { width: 100%; height: 100%; object-fit: cover; }
+        
+        .guide-box {
+            position: absolute; top: 10%; left: 25%; width: 50%; height: 80%;
+            border: 2px solid rgba(255, 255, 255, 0.5); border-radius: 50%; /* Face guide */
+            pointer-events: none;
+        }
+
+        input {
+            width: 100%; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2);
+            padding: 12px; color: white; border-radius: 6px; box-sizing: border-box;
+        }
+
+        button {
+            padding: 15px; background: var(--admin-glow); color: black; font-weight: bold;
+            border: none; border-radius: 6px; cursor: pointer; text-transform: uppercase;
+        }
+        
+        button:hover { filter: brightness(1.2); }
+
+        #status { text-align: center; font-size: 0.85rem; padding: 10px; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>SENTINEL ADMIN</h1>
+    <p style="margin:5px 0 0; font-size:0.8rem; opacity:0.7;">STAFF BIOMETRIC ENROLLMENT</p>
+</header>
+
+<div class="enrollment-card">
+    <div class="viewport-container">
+        <video id="video" autoplay playsinline muted></video>
+        <div class="guide-box"></div> </div>
+
+    <input type="text" id="empName" placeholder="Full Name (e.g. Abdulwahab Salihu)">
+    <input type="text" id="empOffice" placeholder="Office/Role (e.g. Cloud Engineer)">
+    
+    <button onclick="enrollFace()">Capture & Enroll</button>
+    
+    <div id="status">STATUS: WAITING FOR CAPTURE...</div>
+</div>
+
+<script>
+    const video = document.getElementById('video');
+    const status = document.getElementById('status');
+
+    // 1. Start Camera
+    async function startSystem() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+        } catch (err) {
+            status.innerText = "ERROR: Camera access denied.";
+        }
+    }
+
+    // 2. Capture and Send
+    async function enrollFace() {
+        const name = document.getElementById('empName').value;
+        const office = document.getElementById('empOffice').value;
+
+        if (!name || !office) {
+            status.innerText = "ERROR: Name and Office required.";
+            return;
+        }
+
+        status.innerText = "STATUS: EXTRACTING BIOMETRICS...";
+
+        // Create a hidden canvas to take a snapshot of the video
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        
+        // Convert the snapshot to a Base64 string (raw image data)
+        const base64Image = canvas.toDataURL('image/jpeg', 0.8);
+
+        try {
+            const response = await fetch('/api/RegisterEmployee', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name, office: office, imageBase64: base64Image })
+            });
+            
+            const data = await response.json();
+            status.innerText = `STATUS: ${data.message}`;
+        } catch (e) {
+            status.innerText = "STATUS: NETWORK ERROR";
+        }
+    }
+
+    window.onload = startSystem;
+</script>
+
+</body>
+</html>
