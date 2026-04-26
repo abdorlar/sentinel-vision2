@@ -4,7 +4,6 @@ module.exports = async function (context, req) {
     const imageBase64 = req.body && req.body.imageBase64; 
 
     const faceApiKey = process.env.FACE_API_KEY; 
-    // PRO-FIX: Automatically remove any accidental trailing slashes from the endpoint!
     const faceApiEndpoint = (process.env.FACE_API_ENDPOINT || "").replace(/\/$/, ""); 
     const personGroupId = "sentinel-engineering-team"; 
 
@@ -14,17 +13,23 @@ module.exports = async function (context, req) {
     }
 
     try {
-        // 1. Create the Group (with X-Ray error checking)
+        // THE FIX: Explicitly request the newest AI Models
+        const recognitionModel = "recognition_04";
+        const detectionModel = "detection_03";
+
+        // 1. Create the Group (Forcing the modern recognition model)
         const groupRes = await fetch(`${faceApiEndpoint}/face/v1.0/persongroups/${personGroupId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'Ocp-Apim-Subscription-Key': faceApiKey },
-            body: JSON.stringify({ name: "Sentinel Engineering Team" })
+            body: JSON.stringify({ 
+                name: "Sentinel Engineering Team",
+                recognitionModel: recognitionModel // <--- Override the broken default
+            })
         });
         
-        // Status 409 just means the group already exists, which is perfectly fine.
         if (!groupRes.ok && groupRes.status !== 409) {
             const errData = await groupRes.json();
-            throw new Error(`AZURE GROUP ERR: ${errData.error?.message || 'Unknown Group Error'}`);
+            throw new Error(`AZURE GROUP ERR: ${errData.error?.message || 'Invalid Request'}`);
         }
 
         // 2. Create the Person in Azure
@@ -34,18 +39,13 @@ module.exports = async function (context, req) {
             body: JSON.stringify({ name: name, userData: `Office: ${office}` })
         });
         const personData = await createPersonRes.json();
-        
-        // If Azure sends an error object, throw it so we can read it!
-        if (personData.error) {
-            throw new Error(`AZURE PERSON ERR: ${personData.error.message}`);
-        }
-        if (!personData.personId) throw new Error("Failed to get Person ID from Azure.");
+        if (personData.error) throw new Error(`AZURE PERSON ERR: ${personData.error.message}`);
 
         // 3. Convert Base64 back into binary data
         const imageBuffer = Buffer.from(imageBase64.split(',')[1], 'base64');
 
-        // 4. Upload the raw image stream
-        const addFaceRes = await fetch(`${faceApiEndpoint}/face/v1.0/persongroups/${personGroupId}/persons/${personData.personId}/persistedFaces`, {
+        // 4. Upload the raw image stream (Forcing the modern detection model)
+        const addFaceRes = await fetch(`${faceApiEndpoint}/face/v1.0/persongroups/${personGroupId}/persons/${personData.personId}/persistedFaces?detectionModel=${detectionModel}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/octet-stream', 'Ocp-Apim-Subscription-Key': faceApiKey },
             body: imageBuffer
@@ -63,7 +63,6 @@ module.exports = async function (context, req) {
 
     } catch (error) {
         context.log.error(error.message);
-        // We now send the EXACT Microsoft error to the frontend screen
         context.res = { status: 500, body: { message: `${error.message}` } };
     }
 };
